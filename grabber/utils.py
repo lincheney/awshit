@@ -55,12 +55,13 @@ class KeySpec(tuple[str]):
     def matchers(self):
         max_len = len(self.without_format())
         matchers = []
-        for l in range(max_len, 0, -1):
+        for l in range(max_len, -1, -1):
             for start in range(0, max_len - l + 1):
-                k = ' ' + ' '.join(self[start:start+l]) + ' '
+                k = ' ' + ' '.join(self[start:start+l]) + ' ' if l else ' '
 
-                score = self.key_score(l, no_format=True)
-                matchers.append((score, k))
+                if l:
+                    score = self.key_score(l, no_format=True)
+                    matchers.append((score, k))
 
                 for id in self.ID_FORMATS:
                     score = self.key_score(l, correct_format=self.get_format() == id, arn=id == 'arn')

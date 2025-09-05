@@ -27,9 +27,9 @@ class Service:
     def make_method(self, method: str):
         return Method(method, self)
 
-    def unlazy_calls(self, calls, key_spec):
+    def sort_calls(self, calls, key_spec, scorer):
         # group and sort by the quick score
-        group_key = lambda c: c.quick_score(key_spec)
+        group_key = lambda c: scorer(c, key_spec)
         for score, group in itertools.groupby(sorted(calls, key=group_key, reverse=True), group_key):
             group = list(group)
             # then unlazy and get the real score
@@ -51,25 +51,30 @@ class Service:
                 return args
 
         key_spec = KeySpec.make(key, method)
-        calls = []
+        best_methods = []
+        good_methods = []
         bad_methods = []
 
         for m in self.get_method_names():
             if m not in excluded_methods and re.match('(list|describe|get)', m):
                 meth = self.make_method(m)
-                if key_spec.matches(meth.path):
-                    calls.extend(meth.how_to_get(key, method=method, excluded_methods=excluded_methods, **kwargs))
+                if meth.path in [tuple(k.split()) for s, k in key_spec.matchers()]:
+                    best_methods.append(meth)
+                elif key_spec.matches(meth.path):
+                    good_methods.append(meth)
                 else:
                     bad_methods.append(meth)
 
-        for group in self.unlazy_calls(calls, key_spec):
-            return group
-
-        for m in bad_methods:
-            calls.extend(m.how_to_get(key, method=method, excluded_methods=excluded_methods, **kwargs))
-
-        for group in self.unlazy_calls(calls, key_spec):
-            return group
+        for methods, scorer in [
+            (best_methods, lambda c, k: (-len(c.call.method.requires), c.quick_score(k))),
+            (good_methods, lambda c, k: c.quick_score(k)),
+            (bad_methods,  lambda c, k: c.quick_score(k)),
+        ]:
+            calls = []
+            for m in methods:
+                calls.extend(m.how_to_get(key, method=method, excluded_methods=excluded_methods, **kwargs))
+            for group in self.sort_calls(calls, key_spec, scorer):
+                return group
 
         return []
 
