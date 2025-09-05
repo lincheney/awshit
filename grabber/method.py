@@ -85,10 +85,10 @@ class MethodCall(Arg):
         return f'{self.method}({self.args})'
 
     def unlazy(self):
-        unlazied = Args((k, a.unlazy()) for k, a in self.args)
-        if None not in unlazied:
+        unlazied = {k: a.unlazy() for k, a in self.args}
+        if None not in unlazied.values():
             if any(isinstance(a, LazyMethodCall) for a in self.args):
-                self.args = unlazied
+                self.args = Args(unlazied.items())
             return self
 
     def complexity_score(self):

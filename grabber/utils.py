@@ -10,7 +10,7 @@ def singularise(string) -> str:
         return string.removesuffix('aliases') + 'alias'
     if string.endswith('indices'):
         return string.removesuffix('indices') + 'index'
-    if re.search('(prefix|[b-df-hj-np-tv-z]{2})es', string):
+    if re.search('(address|prefix|patch)es', string):
         return string.removesuffix('es')
     if string.endswith('s') and not any(string.endswith(s) for s in ('ss', 'bus', 'status', 'alias', 'analysis')):
         return string.removesuffix('s')
@@ -46,8 +46,8 @@ class KeySpec(tuple[str]):
         return (
             length,
             int(correct_format),
-            int(no_format),
-            int(arn),
+            # int(no_format),
+            # int(arn),
             int(not suffix),
         )
 
@@ -59,7 +59,7 @@ class KeySpec(tuple[str]):
             for start in range(0, max_len - l + 1):
                 k = ' ' + ' '.join(self[start:start+l]) + ' '
 
-                score = self.key_score(l, correct_format=not self.get_format(), no_format=True)
+                score = self.key_score(l, no_format=True)
                 matchers.append((score, k))
 
                 for id in self.ID_FORMATS:

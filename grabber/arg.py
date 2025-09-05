@@ -3,7 +3,7 @@ from functools import cache
 from typing import Self
 
 class Arg:
-    def unlazy(self):
+    def unlazy(self) -> Self|None:
         return self
 
 class StaticArg(Arg):

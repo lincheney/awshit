@@ -31,10 +31,11 @@ class Service:
         # group and sort by the quick score
         group_key = lambda c: c.quick_score(key_spec)
         for score, group in itertools.groupby(sorted(calls, key=group_key, reverse=True), group_key):
+            group = list(group)
             # then unlazy and get the real score
-            if group := list(filter(None, (c.unlazy() for c in group))):
-                group.sort(key=lambda c: c.score(key_spec), reverse=True)
-                yield group
+            if resolved := list(filter(None, (c.unlazy() for c in group))):
+                resolved.sort(key=lambda c: c.score(key_spec), reverse=True)
+                yield resolved
 
     @classmethod
     def how_to_get_from_shape(cls, shape):
@@ -55,11 +56,11 @@ class Service:
 
         for m in self.get_method_names():
             if m not in excluded_methods and re.match('(list|describe|get)', m):
-                m = self.make_method(m)
-                if key_spec.matches(m.path):
-                    calls.extend(m.how_to_get(key, method=method, excluded_methods=excluded_methods, **kwargs))
+                meth = self.make_method(m)
+                if key_spec.matches(meth.path):
+                    calls.extend(meth.how_to_get(key, method=method, excluded_methods=excluded_methods, **kwargs))
                 else:
-                    bad_methods.append(m)
+                    bad_methods.append(meth)
 
         for group in self.unlazy_calls(calls, key_spec):
             return group
