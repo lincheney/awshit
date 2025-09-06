@@ -1,0 +1,1 @@
+../quick-aws/plugin.py
