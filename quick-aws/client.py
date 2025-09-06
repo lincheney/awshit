@@ -7,16 +7,20 @@ import sys
 from pathlib import Path
 import multiprocessing.reduction
 
+def wait_for_server(proc, socket_path):
+    # wait up to 1s for server to start
+    for i in range(10):
+        if proc.poll() is not None:
+            return False
+        if os.path.exists(socket_path):
+            return proc.poll() is None
+        time.sleep(0.1)
+
 def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))):
     if not os.path.exists(socket_path):
         # spawn the server
         proc = subprocess.Popen([sys.executable, Path(__file__).parent/'command_server.py'])
-        # wait up to 1s for server to start
-        for i in range(10):
-            if os.path.exists(socket_path):
-                break
-            time.sleep(0.1)
-        else:
+        if not wait_for_server(proc, socket_path):
             # could not spawn/connect to server, run aws directly
             proc.terminate()
             # proc.kill()
