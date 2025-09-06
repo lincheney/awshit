@@ -92,7 +92,12 @@ class WorkerState:
         enter_context(self.temp_dup_fd(fds[2], 2))
 
         args = json.loads(data)
-        assert isinstance(args, list) and args, 'arguments is not a non-empty list'
+        assert isinstance(args, list) and len(args) > 1, 'arguments is not a non-empty list'
+
+        # custom commands
+        if args[1] == '/reload':
+            os.kill(os.getppid(), signal.SIGUSR1)
+            return
 
         # Extract environment variables from the first element of the list
         env_vars = args.pop(0)
@@ -176,6 +181,15 @@ class State:
                 server.bind(socket_path)
                 server.listen()
 
+                def sigusr1_handler(signum, frame):
+                    # reexec
+                    self.cleanup(socket_path)
+                    self.sock.close()
+                    server.close()
+                    args = sys.argv
+                    os.execvp(args[0], args)
+                signal.signal(signal.SIGUSR1, sigusr1_handler)
+
                 while True:
                     try:
                         with timeouter(inactivity_timeout, condition=lambda: not self.worker_pids):
@@ -185,8 +199,11 @@ class State:
                     else:
                         self.queue_work(client, inactivity_timeout=inactivity_timeout)
         finally:
-            if self.pid == os.getpid() and os.path.exists(socket_path):
-                os.unlink(socket_path)
+            self.cleanup(socket_path)
+
+    def cleanup(self, socket_path):
+        if self.pid == os.getpid() and os.path.exists(socket_path):
+            os.unlink(socket_path)
 
 def start_server(driver, argv, opts=None):
     state = State(
