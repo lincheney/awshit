@@ -108,6 +108,8 @@ class WorkerState:
         self.driver._update_config_chain()
         # Make a copy of the driver
         driver = copy.copy(self.driver)
+        # always rebuild aliases
+        driver.alias_loader._aliases = None
         return driver.main(args)
 
     def fork(self, *args, **kwargs):
