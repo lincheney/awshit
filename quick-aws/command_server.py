@@ -172,7 +172,7 @@ class State:
             if self.pid == os.getpid() and os.path.exists(socket_path):
                 os.unlink(socket_path)
 
-def start_server(driver, argv, opts):
+def start_server(driver, argv, opts=None):
     state = State(
         driver=driver,
         loader=driver.session.get_component('data_loader'),
@@ -189,4 +189,18 @@ def start_server(driver, argv, opts):
             return object.__getattribute__(driver.session, key)
     driver.session.__class__ = SessionInjection
 
-    state.run(os.path.expanduser("~/.aws/cli/start_server.sock"))
+    socket_path = os.environ.get('AWS_SOCKET', os.path.expanduser('~/.aws/cli/start_server.sock'))
+    state.run(socket_path)
+
+def main():
+    try:
+        import awscli.clidriver
+    except ImportError:
+        # can't import directly, hopefully you have installed as a plugin
+        args = ['aws', '.start-command-server']
+        os.execvp(args[0], args)
+    else:
+        start_server(awscli.clidriver.CLIDriver(), sys.argv[1:])
+
+if __name__ == '__main__':
+    sys.exit(main())
