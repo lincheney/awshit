@@ -2,6 +2,7 @@
 
 import sys
 import copy
+import time
 import signal
 import os
 import traceback
@@ -117,11 +118,6 @@ class WorkerState:
         driver.alias_loader._aliases = None
         return driver.main(args)
 
-    def fork(self, *args, **kwargs):
-        if (pid := os.fork()) > 0:
-            return pid
-        self.run(*args, **kwargs)
-
     def run(self, inactivity_timeout=300):
         while True:
             # available
@@ -130,7 +126,7 @@ class WorkerState:
                 with timeouter(inactivity_timeout):
                     # get the client socket
                     sockfd = multiprocessing.reduction.recvfds(self.sock, 1)[0]
-            except TimeoutError:
+            except (TimeoutError, EOFError):
                 return
             finally:
                 # unavailable
@@ -151,6 +147,12 @@ class State:
         self.worker = WorkerState(*args, sock=recv, semaphore=self.semaphore, **kwargs)
         self.worker_pids = set()
 
+    def fork(self, *args, **kwargs):
+        if (pid := os.fork()) > 0:
+            return pid
+        self.sock.close()
+        self.worker.run(*args, **kwargs)
+
     def queue_work(self, sock, **kwargs):
         # check if any worker available
         if self.semaphore.acquire(False):
@@ -158,11 +160,12 @@ class State:
             self.semaphore.release()
         else:
             # no workers available, start one
-            pid = self.worker.fork(**kwargs)
+            pid = self.fork(**kwargs)
             if pid is None:
                 return
             self.worker_pids.add(pid)
         multiprocessing.reduction.sendfds(self.sock, [sock.fileno()])
+        return True
 
     def run(self, socket_path, inactivity_timeout=300):
         if os.path.exists(socket_path):
@@ -197,7 +200,8 @@ class State:
                     except TimeoutError:
                         return
                     else:
-                        self.queue_work(client, inactivity_timeout=inactivity_timeout)
+                        if not self.queue_work(client, inactivity_timeout=inactivity_timeout):
+                            return
         finally:
             self.cleanup(socket_path)
 
@@ -206,6 +210,13 @@ class State:
             os.unlink(socket_path)
 
 def start_server(driver, argv, opts=None):
+    # slurp up any zombie children
+    while True:
+        try:
+            os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            break
+
     state = State(
         driver=driver,
         loader=driver.session.get_component('data_loader'),
