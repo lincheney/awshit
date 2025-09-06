@@ -2,7 +2,6 @@
 
 import sys
 import copy
-import time
 import signal
 import os
 import traceback
@@ -44,11 +43,10 @@ def timeouter(timeout, condition=None):
         signal.alarm(0)
 
 class WorkerState:
-    def __init__(self, sock, driver, loader, environ, semaphore):
+    def __init__(self, sock, driver, loader, semaphore):
         self.sock = sock
         self.driver = driver
         self.loader = loader
-        self.environ = environ
         self.semaphore = semaphore
         self.fd_cache = {}
 
@@ -65,12 +63,13 @@ class WorkerState:
 
     def work(self, sock):
         with contextlib.ExitStack() as exit_stack:
-            enter_context = exit_stack.enter_context
-            sock = enter_context(socket.fromfd(sock, socket.AF_UNIX, socket.SOCK_STREAM))
+            sock = exit_stack.enter_context(socket.fromfd(sock, socket.AF_UNIX, socket.SOCK_STREAM))
             exit_code = 1
             try:
-                exit_code = self._work(sock, enter_context) or 0
-            except Exception:
+                exit_code = self._work(sock, exit_stack.enter_context) or 0
+            except SystemExit as e:
+                exit_code = e.code
+            except BaseException:
                 traceback.print_exc()
             finally:
                 # Write the exit code back to the client
@@ -103,9 +102,7 @@ class WorkerState:
         # Extract environment variables from the first element of the list
         env_vars = args.pop(0)
         assert isinstance(env_vars, dict), 'first argument should be a dict of env vars'
-        environ = self.environ.copy()
-        environ.update(env_vars)
-        enter_context(temp_set_attr(os, 'environ', environ))
+        enter_context(temp_set_attr(os, 'environ', env_vars))
 
         # Construct a new session
         self.driver.session = botocore.session.get_session()
@@ -136,6 +133,7 @@ class WorkerState:
 
 class State:
     def __init__(self, *args, **kwargs):
+        self.exit_stack = contextlib.ExitStack()
         self.semaphore = multiprocessing.Semaphore(value=0)
         self.pid = os.getpid()
         # make socket that workers use
@@ -143,27 +141,24 @@ class State:
         recv.setblocking(True)
         send.setblocking(True)
         self.sock = send
+        self.exit_stack.enter_context(self.sock)
 
         self.worker = WorkerState(*args, sock=recv, semaphore=self.semaphore, **kwargs)
         self.worker_pids = set()
 
-    def fork(self, *args, **kwargs):
-        if (pid := os.fork()) > 0:
-            return pid
-        self.sock.close()
-        self.worker.run(*args, **kwargs)
-
-    def queue_work(self, sock, **kwargs):
+    def queue_work(self, server, sock, **kwargs):
         # check if any worker available
         if self.semaphore.acquire(False):
             # reset it
             self.semaphore.release()
-        else:
-            # no workers available, start one
-            pid = self.fork(**kwargs)
-            if pid is None:
-                return
+        # no workers available, start one
+        elif (pid := os.fork()) > 0:
             self.worker_pids.add(pid)
+        else:
+            self.exit_stack.close()
+            self.worker.run(**kwargs)
+            return
+
         multiprocessing.reduction.sendfds(self.sock, [sock.fileno()])
         return True
 
@@ -174,36 +169,32 @@ class State:
         # reap and keep track of workers
         def sigchld_handler(signum, frame):
             pid, status = os.wait()
-            if pid in self.worker_pids:
-                self.worker_pids.remove(pid)
+            self.worker_pids -= {pid}
         signal.signal(signal.SIGCHLD, sigchld_handler)
 
+        def sigusr1_handler(signum, frame):
+            # reexec
+            self.exit_stack.close()
+            os.execvp(sys.argv[0], sys.argv)
+        signal.signal(signal.SIGUSR1, sigusr1_handler)
+
         # Set up the Unix socket server
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-                server.bind(socket_path)
-                server.listen()
+        with self.exit_stack:
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.exit_stack.enter_context(server)
+            self.exit_stack.callback(self.cleanup, socket_path)
+            server.bind(socket_path)
+            server.listen()
 
-                def sigusr1_handler(signum, frame):
-                    # reexec
-                    self.cleanup(socket_path)
-                    self.sock.close()
-                    server.close()
-                    args = sys.argv
-                    os.execvp(args[0], args)
-                signal.signal(signal.SIGUSR1, sigusr1_handler)
-
-                while True:
-                    try:
-                        with timeouter(inactivity_timeout, condition=lambda: not self.worker_pids):
-                            client, addr = server.accept()
-                    except TimeoutError:
+            while True:
+                try:
+                    with timeouter(inactivity_timeout, condition=lambda: not self.worker_pids):
+                        client, addr = server.accept()
+                except TimeoutError:
+                    return
+                else:
+                    if not self.queue_work(server, client, inactivity_timeout=inactivity_timeout):
                         return
-                    else:
-                        if not self.queue_work(client, inactivity_timeout=inactivity_timeout):
-                            return
-        finally:
-            self.cleanup(socket_path)
 
     def cleanup(self, socket_path):
         if self.pid == os.getpid() and os.path.exists(socket_path):
@@ -220,7 +211,6 @@ def start_server(driver, argv, opts=None):
     state = State(
         driver=driver,
         loader=driver.session.get_component('data_loader'),
-        environ=os.environ.copy()
     )
 
     # awscrt starts a thread for logging, but it won't work post fork
@@ -233,7 +223,7 @@ def start_server(driver, argv, opts=None):
             return object.__getattribute__(driver.session, key)
     driver.session.__class__ = SessionInjection
 
-    socket_path = os.environ.get('AWS_SOCKET', os.path.expanduser('~/.aws/cli/start_server.sock'))
+    socket_path = os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))
     state.run(socket_path)
 
 def main():

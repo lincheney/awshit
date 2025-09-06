@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 import multiprocessing.reduction
 
-def main(socket_path=os.environ.get('AWS_SOCKET', os.path.expanduser('~/.aws/cli/start_server.sock'))):
+def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))):
     if not os.path.exists(socket_path):
         # spawn the server
         proc = subprocess.Popen([sys.executable, Path(__file__).parent/'command_server.py'])
