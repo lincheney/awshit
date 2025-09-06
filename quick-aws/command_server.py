@@ -5,7 +5,7 @@ import copy
 import signal
 import os
 import traceback
-from functools import partial
+from functools import partial, cache
 import json
 import socket
 import contextlib
@@ -26,6 +26,14 @@ def temp_set_attr(var, name, file):
         yield
     finally:
         setattr(var, name, original)
+
+@contextlib.contextmanager
+def temp_dup_fd(src, dest, original):
+    try:
+        os.dup2(src, dest)
+        yield
+    finally:
+        os.dup2(original, dest)
 
 @contextlib.contextmanager
 def timeouter(timeout, condition=None):
@@ -50,13 +58,17 @@ class WorkerState:
         self.environ = environ
         self.semaphore = semaphore
 
+    @cache
+    def get_original_fds(self):
+        return [os.dup(0), os.dup(1), os.dup(2)]
+
     def work(self, sock):
         with contextlib.ExitStack() as exit_stack:
             enter_context = exit_stack.enter_context
             sock = enter_context(socket.fromfd(sock, socket.AF_UNIX, socket.SOCK_STREAM))
             exit_code = 1
             try:
-                exit_code = self._work(sock, enter_context)
+                exit_code = self._work(sock, enter_context) or 0
             except Exception:
                 traceback.print_exc()
             finally:
@@ -75,9 +87,9 @@ class WorkerState:
         while chunk := sock.recv(4096):
             data += chunk
 
-        enter_context(temp_set_attr(sys, 'stdin', stdin))
-        enter_context(temp_set_attr(sys, 'stdout', stdout))
-        enter_context(temp_set_attr(sys, 'stderr', stderr))
+        enter_context(temp_dup_fd(fds[0], 0, self.get_original_fds()[0]))
+        enter_context(temp_dup_fd(fds[1], 1, self.get_original_fds()[1]))
+        enter_context(temp_dup_fd(fds[2], 2, self.get_original_fds()[2]))
 
         args = json.loads(data)
         assert isinstance(args, list) and args, 'arguments is not a non-empty list'
