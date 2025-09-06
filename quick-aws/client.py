@@ -1,10 +1,28 @@
 import os
 import socket
+import time
+import subprocess
 import json
 import sys
+from pathlib import Path
 import multiprocessing.reduction
 
 def main(socket_path=os.environ.get('AWS_SOCKET', os.path.expanduser('~/.aws/cli/start_server.sock'))):
+    if not os.path.exists(socket_path):
+        # spawn the server
+        proc = subprocess.Popen([sys.executable, Path(__file__).parent/'command_server.py'])
+        # wait up to 1s for server to start
+        for i in range(10):
+            if os.path.exists(socket_path):
+                break
+            time.sleep(0.1)
+        else:
+            # could not spawn/connect to server, run aws directly
+            proc.terminate()
+            proc.kill()
+            args = ['aws', *sys.argv[1:]]
+            os.execvp(args[0], args)
+
     data = [dict(os.environ)] + sys.argv[1:]
     serialized_data = json.dumps(data).encode()
 
