@@ -92,10 +92,10 @@ class WorkerState:
         enter_context(self.temp_dup_fd(fds[2], 2))
 
         args = json.loads(data)
-        assert isinstance(args, list) and len(args) > 1, 'arguments is not a non-empty list'
+        assert isinstance(args, list) and len(args) >= 1, 'arguments is not a non-empty list'
 
         # custom commands
-        if args[1] == '/reload':
+        if len(args) > 1 and args[1] == '/reload':
             os.kill(os.getppid(), signal.SIGUSR1)
             return
 
