@@ -10,7 +10,6 @@ import json
 import socket
 import contextlib
 import multiprocessing.reduction
-import botocore.session
 
 def awscli_initialize(event_hooks):
     event_hooks.register('building-command-table.main', inject_commands)
@@ -76,6 +75,8 @@ class WorkerState:
                 sock.sendall(str(exit_code).encode())
 
     def _work(self, sock, enter_context):
+        import botocore.session
+
         # Receive file descriptors for stdin, stdout, and stderr
         fds = multiprocessing.reduction.recvfds(sock, 3)
         stdin = enter_context(os.fdopen(fds[0], 'r'))
@@ -231,10 +232,14 @@ def main():
         import awscli.clidriver
     except ImportError:
         # can't import directly, hopefully you have installed as a plugin
-        args = ['aws', '.start-command-server']
+        import client
+        args = [client.find_aws(), '.start-command-server']
         os.execvp(args[0], args)
     else:
         start_server(awscli.clidriver.CLIDriver(), sys.argv[1:])
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass
