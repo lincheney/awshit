@@ -1,1 +1,3 @@
-# aws.hit
+# awshit
+
+AWS Hacks and Interesting Tools
