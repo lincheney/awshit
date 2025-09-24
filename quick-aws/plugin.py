@@ -27,6 +27,17 @@ def temp_set_attr(var, name, file):
         setattr(var, name, original)
 
 @contextlib.contextmanager
+def temp_set_environ(environ):
+    original = os.environ.copy()
+    try:
+        os.environ.clear()
+        os.environ.update(environ)
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(original)
+
+@contextlib.contextmanager
 def timeouter(timeout, condition=None):
     def timeout_handler(signum, frame):
         if condition is None or condition():
@@ -113,7 +124,7 @@ class WorkerState:
         # Extract environment variables from the first element of the list
         env_vars = args.pop(0)
         assert isinstance(env_vars, dict), 'first argument should be a dict of env vars'
-        enter_context(temp_set_attr(os, 'environ', env_vars))
+        enter_context(temp_set_environ(env_vars))
 
         # Construct a new session
         self.driver.session = botocore.session.get_session()
