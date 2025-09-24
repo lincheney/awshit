@@ -41,6 +41,16 @@ def timeouter(timeout, condition=None):
     finally:
         signal.alarm(0)
 
+def waitpids():
+    while True:
+        try:
+            pid, status = os.waitpid(-1, os.WNOHANG)
+            if pid == 0:
+                break
+            yield pid
+        except ChildProcessError:
+            break
+
 class WorkerState:
     def __init__(self, sock, driver, loader, semaphore):
         self.sock = sock
@@ -169,8 +179,8 @@ class State:
 
         # reap and keep track of workers
         def sigchld_handler(signum, frame):
-            pid, status = os.wait()
-            self.worker_pids -= {pid}
+            for pid in waitpids():
+                self.worker_pids -= {pid}
         signal.signal(signal.SIGCHLD, sigchld_handler)
 
         def sigusr1_handler(signum, frame):
@@ -203,11 +213,7 @@ class State:
 
 def start_server(driver, argv, opts=None):
     # slurp up any zombie children
-    while True:
-        try:
-            os.waitpid(-1, os.WNOHANG)
-        except ChildProcessError:
-            break
+    list(waitpids())
 
     state = State(
         driver=driver,
