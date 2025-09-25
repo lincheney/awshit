@@ -63,10 +63,10 @@ def waitpids():
             break
 
 class WorkerState:
-    def __init__(self, sock, driver, loader, semaphore):
+    def __init__(self, sock, driver, components, semaphore):
         self.sock = sock
         self.driver = driver
-        self.loader = loader
+        self.components = components
         self.semaphore = semaphore
         self.fd_cache = {}
 
@@ -128,8 +128,9 @@ class WorkerState:
 
         # Construct a new session
         self.driver.session = botocore.session.get_session()
-        # reuse the same loader
-        self.driver.session.register_component('data_loader', self.loader)
+        # reuse the same loader etc
+        for k, v in self.components.items():
+            self.driver.session.register_component(k, v)
         self.driver._update_config_chain()
         # Make a copy of the driver
         driver = copy.copy(self.driver)
@@ -228,7 +229,7 @@ def start_server(driver, argv, opts=None):
 
     state = State(
         driver=driver,
-        loader=driver.session.get_component('data_loader'),
+        components={k: driver.session.get_component(k) for k in {'data_loader', 'event_emitter', 'response_parser_factory'}},
     )
 
     # awscrt starts a thread for logging, but it won't work post fork
