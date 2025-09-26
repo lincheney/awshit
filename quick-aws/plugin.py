@@ -231,7 +231,7 @@ def start_server(driver, argv, opts=None):
 
     state = State(
         driver=driver,
-        components={k: driver.session.get_component(k) for k in {'data_loader', 'event_emitter', 'response_parser_factory'}},
+        components={k: driver.session.get_component(k) for k in {'data_loader', 'event_emitter', 'response_parser_factory', 'endpoint_resolver', 'exceptions_factory'}},
     )
 
     # awscrt starts a thread for logging, but it won't work post fork
