@@ -194,6 +194,8 @@ class State:
             for pid in waitpids():
                 self.worker_pids -= {pid}
         signal.signal(signal.SIGCHLD, sigchld_handler)
+        # make sigterm trigger context managers
+        signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
 
         def sigusr1_handler(signum, frame):
             # reexec
