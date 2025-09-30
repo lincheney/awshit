@@ -127,14 +127,15 @@ class WorkerState:
         assert isinstance(env_vars, dict), 'first argument should be a dict of env vars'
         enter_context(temp_set_environ(env_vars))
 
-        # Construct a new session
-        self.driver.session = botocore.session.get_session()
-        # reuse the same loader etc
-        for k, v in self.components.items():
-            self.driver.session.register_component(k, v)
-        self.driver._update_config_chain()
         # Make a copy of the driver
         driver = copy.copy(self.driver)
+        # Construct a new session
+        driver.session = botocore.session.get_session()
+        # reuse the same loader etc
+        for k, v in self.components.items():
+            driver.session.register_component(k, v)
+        driver._update_config_chain()
+        driver.session._events = self.driver.session._events
         # always rebuild aliases
         driver.alias_loader._aliases = None
         return driver.main(args)
@@ -257,7 +258,7 @@ def main():
         args = [client.find_aws(), '.start-command-server']
         os.execvp(args[0], args)
     else:
-        start_server(awscli.clidriver.CLIDriver(), sys.argv[1:])
+        start_server(awscli.clidriver.create_clidriver(), sys.argv[1:])
 
 if __name__ == '__main__':
     try:
