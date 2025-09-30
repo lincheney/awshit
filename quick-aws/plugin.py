@@ -83,7 +83,8 @@ class WorkerState:
 
     def work(self, sock):
         with contextlib.ExitStack() as exit_stack:
-            sock = exit_stack.enter_context(socket.fromfd(sock, socket.AF_UNIX, socket.SOCK_STREAM))
+            # socket.fromfd dups the fd
+            sock = exit_stack.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0, fileno=sock))
             exit_code = 1
             try:
                 exit_code = self._work(sock, exit_stack.enter_context) or 0
