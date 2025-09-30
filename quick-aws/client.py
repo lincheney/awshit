@@ -22,19 +22,21 @@ def find_aws():
 def wait_for_server(proc, socket_path):
     # wait up to 1s for server to start
     for i in range(10):
+        if os.path.exists(socket_path):
+            return True
         if proc.poll() is not None:
             return False
-        if os.path.exists(socket_path):
-            return proc.poll() is None
         time.sleep(0.1)
 
 def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))):
     if not os.path.exists(socket_path):
         # spawn the server
-        proc = subprocess.Popen([sys.executable, Path(__file__).readlink().parent/'plugin.py'])
+        proc = subprocess.Popen([sys.executable, Path(__file__).readlink().parent/'plugin.py'], stderr=subprocess.PIPE)
         if not wait_for_server(proc, socket_path):
             # could not spawn/connect to server, run aws directly
             proc.terminate()
+            sys.stderr.buffer.write(proc.stderr.read())
+            sys.stderr.buffer.flush()
             # proc.kill()
             args = [find_aws(), *sys.argv[1:]]
             os.execvp(args[0], args)
