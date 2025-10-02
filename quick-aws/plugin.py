@@ -70,6 +70,11 @@ class WorkerState:
         self.semaphore = semaphore
         self.fd_cache = {}
 
+        class SessionInjection:
+            def __getattribute__(_self, key):
+                return object.__getattribute__(self.session, key)
+        self.driver.session.__class__ = SessionInjection
+
     @contextlib.contextmanager
     def temp_dup_fd(self, src, dest):
         if dest not in self.fd_cache:
@@ -240,11 +245,6 @@ def start_server(driver, argv, opts=None):
     # so we just disable it
     import awscrt
     awscrt.io.init_logging = lambda *a: None
-
-    class SessionInjection:
-        def __getattribute__(self, key):
-            return object.__getattribute__(driver.session, key)
-    driver.session.__class__ = SessionInjection
 
     socket_path = os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))
     state.run(socket_path)
