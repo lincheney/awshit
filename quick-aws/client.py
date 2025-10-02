@@ -42,7 +42,7 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
             os.execvp(args[0], args)
 
     data = [dict(os.environ)] + sys.argv[1:]
-    serialized_data = json.dumps(data).encode()
+    serialized_data = json.dumps(data).encode() + b'\n'
 
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.connect(socket_path)
@@ -53,11 +53,12 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
 
         # Send the serialized data
         client.sendall(serialized_data)
-        # done writing but not reading
-        client.shutdown(socket.SHUT_WR)
 
         # Read the exit code from the server
         return int(client.recv(1024).decode() or '1')
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass

@@ -4,6 +4,9 @@ import sys
 import copy
 import signal
 import os
+import time
+import select
+import threading
 import traceback
 from functools import partial
 import json
@@ -69,6 +72,9 @@ class WorkerState:
         self.components = components
         self.semaphore = semaphore
         self.fd_cache = {}
+        self.current_sock = None
+        self.sock_event = threading.Event()
+        self.should_quit = False
 
         class SessionInjection:
             def __getattribute__(_self, key):
@@ -99,7 +105,13 @@ class WorkerState:
                 traceback.print_exc()
             finally:
                 # Write the exit code back to the client
-                sock.sendall(str(exit_code).encode())
+                self.current_sock = None
+                try:
+                    sock.sendall(str(exit_code).encode())
+                except BrokenPipeError:
+                    pass
+                except Exception:
+                    traceback.print_exc()
 
     def _work(self, sock, enter_context):
         import botocore.session
@@ -112,12 +124,18 @@ class WorkerState:
 
         # read everything
         data = b""
-        while chunk := sock.recv(4096):
+        while True:
+            chunk = sock.recv(4096)
             data += chunk
+            if not chunk or b'\n' in chunk:
+                break
+
+        self.current_sock = sock
+        self.sock_event.set()
 
         enter_context(self.temp_dup_fd(fds[0], 0))
         enter_context(self.temp_dup_fd(fds[1], 1))
-        enter_context(self.temp_dup_fd(fds[2], 2))
+        #  enter_context(self.temp_dup_fd(fds[2], 2))
 
         args = json.loads(data)
         assert isinstance(args, list) and len(args) >= 1, 'arguments is not a non-empty list'
@@ -136,6 +154,7 @@ class WorkerState:
         driver = copy.copy(self.driver)
         # Construct a new session
         driver.session = botocore.session.get_session()
+        self.session = driver.session
         # reuse the same loader etc
         for k, v in self.components.items():
             driver.session.register_component(k, v)
@@ -146,7 +165,8 @@ class WorkerState:
         return driver.main(args)
 
     def run(self, inactivity_timeout=300):
-        while True:
+        threading.Thread(target=self.socket_checker, daemon=True).start()
+        while not self.should_quit:
             # available
             self.semaphore.release()
             try:
@@ -160,6 +180,22 @@ class WorkerState:
                 self.semaphore.acquire(False)
             # do the work
             self.work(sockfd)
+
+    def socket_checker(self):
+        while True:
+            # wait til we are working
+            self.sock_event.wait()
+            sock = self.current_sock
+            self.sock_event.clear()
+            # wait until sock is closed
+            select.select([sock], (), ())
+            # if we are still working on the same sock, then terminate
+            if self.current_sock is sock:
+                self.should_quit = True
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(1)
+                # we should have exited by now
+                os._exit(1)
 
 class State:
     def __init__(self, *args, **kwargs):
