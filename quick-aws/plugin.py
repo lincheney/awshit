@@ -98,7 +98,7 @@ class WorkerState:
             sock = exit_stack.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0, fileno=sock))
             exit_code = 1
             try:
-                exit_code = self._work(sock, exit_stack.enter_context) or 0
+                exit_code = self._work(sock, exit_stack) or 0
             except SystemExit as e:
                 exit_code = e.code
             except BaseException:
@@ -113,14 +113,14 @@ class WorkerState:
                 except Exception:
                     traceback.print_exc()
 
-    def _work(self, sock, enter_context):
+    def _work(self, sock, exit_stack):
         import botocore.session
 
         # Receive file descriptors for stdin, stdout, and stderr
         fds = multiprocessing.reduction.recvfds(sock, 3)
-        stdin = enter_context(os.fdopen(fds[0], 'r'))
-        stdout = enter_context(os.fdopen(fds[1], 'w'))
-        stderr = enter_context(os.fdopen(fds[2], 'w'))
+        exit_stack.callback(os.close, fds[0])
+        exit_stack.callback(os.close, fds[1])
+        exit_stack.callback(os.close, fds[2])
 
         # read everything
         data = b""
@@ -133,9 +133,9 @@ class WorkerState:
         self.current_sock = sock
         self.sock_event.set()
 
-        enter_context(self.temp_dup_fd(fds[0], 0))
-        enter_context(self.temp_dup_fd(fds[1], 1))
-        #  enter_context(self.temp_dup_fd(fds[2], 2))
+        exit_stack.enter_context(self.temp_dup_fd(fds[0], 0))
+        exit_stack.enter_context(self.temp_dup_fd(fds[1], 1))
+        exit_stack.enter_context(self.temp_dup_fd(fds[2], 2))
 
         args = json.loads(data)
         assert isinstance(args, list) and len(args) >= 1, 'arguments is not a non-empty list'
@@ -148,7 +148,7 @@ class WorkerState:
         # Extract environment variables from the first element of the list
         env_vars = args.pop(0)
         assert isinstance(env_vars, dict), 'first argument should be a dict of env vars'
-        enter_context(temp_set_environ(env_vars))
+        exit_stack.enter_context(temp_set_environ(env_vars))
 
         # Make a copy of the driver
         driver = copy.copy(self.driver)
