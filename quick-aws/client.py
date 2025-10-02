@@ -31,7 +31,13 @@ def wait_for_server(proc, socket_path):
 def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))):
     if not os.path.exists(socket_path):
         # spawn the server
-        proc = subprocess.Popen([sys.executable, Path(__file__).readlink().parent/'plugin.py'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(
+            [sys.executable, Path(__file__).readlink().parent/'plugin.py'],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
         if not wait_for_server(proc, socket_path):
             # could not spawn/connect to server, run aws directly
             proc.terminate()
