@@ -136,6 +136,8 @@ class WorkerState:
         exit_stack.enter_context(self.temp_dup_fd(fds[0], 0))
         exit_stack.enter_context(self.temp_dup_fd(fds[1], 1))
         exit_stack.enter_context(self.temp_dup_fd(fds[2], 2))
+        exit_stack.callback(sys.stdout.flush)
+        exit_stack.callback(sys.stderr.flush)
 
         args = json.loads(data)
         assert isinstance(args, list) and len(args) >= 1, 'arguments is not a non-empty list'
