@@ -155,13 +155,12 @@ class WorkerState:
         # Make a copy of the driver
         driver = copy.copy(self.driver)
         # Construct a new session
-        driver.session = botocore.session.get_session()
+        driver.session = botocore.session.Session(event_hooks=self.components['event_emitter'])
         self.session = driver.session
         # reuse the same loader etc
         for k, v in self.components.items():
             driver.session.register_component(k, v)
         driver._update_config_chain()
-        driver.session._events = self.driver.session._events
         # always rebuild aliases
         driver.alias_loader._aliases = None
         return driver.main(args)
@@ -274,9 +273,16 @@ def start_server(driver, argv, opts=None):
     # slurp up any zombie children
     list(waitpids())
 
+    components = {
+        'data_loader',
+        'event_emitter',
+        'response_parser_factory',
+        'endpoint_resolver',
+        'exceptions_factory',
+    }
     state = State(
         driver=driver,
-        components={k: driver.session.get_component(k) for k in {'data_loader', 'event_emitter', 'response_parser_factory', 'endpoint_resolver', 'exceptions_factory'}},
+        components={k: driver.session.get_component(k) for k in components},
     )
 
     # awscrt starts a thread for logging, but it won't work post fork
