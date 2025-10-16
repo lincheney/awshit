@@ -154,8 +154,9 @@ class WorkerState:
 
         # Make a copy of the driver
         driver = copy.copy(self.driver)
+        event_hooks = copy.copy(self.components['event_emitter'])
         # Construct a new session
-        driver.session = botocore.session.Session(event_hooks=self.components['event_emitter'])
+        driver.session = botocore.session.Session(event_hooks=event_hooks)
         self.session = driver.session
         # reuse the same loader etc
         for k, v in self.components.items():
