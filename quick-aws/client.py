@@ -45,7 +45,7 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
             args = [find_aws(), *sys.argv[1:]]
             os.execvp(args[0], args)
 
-    data = [dict(os.environ)] + sys.argv[1:]
+    data = [dict(os.environ), os.getcwd()] + sys.argv[1:]
     serialized_data = json.dumps(data).encode() + b'\n'
 
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:

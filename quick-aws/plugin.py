@@ -143,7 +143,7 @@ class WorkerState:
         assert isinstance(args, list) and len(args) >= 1, 'arguments is not a non-empty list'
 
         # custom commands
-        if len(args) > 1 and args[1] == '/reload':
+        if len(args) > 2 and args[2] == '/reload':
             os.kill(os.getppid(), signal.SIGUSR1)
             return
 
@@ -151,6 +151,11 @@ class WorkerState:
         env_vars = args.pop(0)
         assert isinstance(env_vars, dict), 'first argument should be a dict of env vars'
         exit_stack.enter_context(temp_set_environ(env_vars))
+
+        # Extract cwd from the second element of the list
+        cwd = args.pop(0)
+        assert isinstance(cwd, str), 'second argument should be a string of the cwd'
+        exit_stack.enter_context(contextlib.chdir(cwd))
 
         # Make a copy of the driver
         driver = copy.copy(self.driver)
@@ -291,6 +296,7 @@ def start_server(driver, argv, opts=None):
     import awscrt
     awscrt.io.init_logging = lambda *a: None
 
+    os.chdir(os.path.expanduser('~/.aws/cli/'))
     socket_path = os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))
     state.run(socket_path)
 
