@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import sys
 import re
+import os
+import shlex
 import math
 from functools import partial
 import itertools
@@ -87,9 +88,10 @@ def get_args_from_arg_table(cli, required, positional, exclude):
 def complete_from_arg_table_positional(parsed, cli, required):
     exclude = parsed.parsed_params | parsed.global_params
     positional = get_args_from_arg_table(cli, required, True, exclude)
-    # files
-    if any(v.argument_model.name in {'StreamingOutputArgument'} for v in positional):
-        delegate_completion(['cat', '--', parsed.current_fragment])
+    if files := [v for v in positional if v.argument_model.name in {'StreamingOutputArgument'}]:
+        v = files[0]
+        doc = remove_xml(extract_doc(v.documentation))
+        complete_files(parsed.current_fragment, doc=f'({v.name}) {doc}')
 
 def complete_from_arg_table(parsed, cli, required):
     exclude = parsed.parsed_params | parsed.global_params
@@ -146,18 +148,28 @@ def complete_regions(parsed, driver):
     for name, doc in complete_from_completer(autocomplete.basic.RegionCompleter(), parsed) or ():
         yield (name, regions[name])
 
+def complete_files(fragment, doc='', prefix=''):
+    dirname = os.path.dirname(fragment)
+    basename = os.path.basename(fragment)
+
+    for root, dirs, files in os.walk(dirname or '.'):
+        if not basename.startswith('.'):
+            dirs = [d for d in dirs if not d.startswith('.')]
+            files = [f for f in files if not f.startswith('.')]
+        print_completions([(prefix + os.path.join(dirname, x) + '/', doc) for x in dirs], suffix='')
+        print_completions([(prefix + os.path.join(dirname, x), doc) for x in files])
+        break
+
 max_name_len = 0
-def print_completions(results):
+def print_completions(results, suffix=None):
     global max_name_len
     if results := list(results):
         names = [n for n, d in results]
         max_name_len = max(max_name_len, math.ceil(max(map(len, names)) / 4 + 1) * 4)
         fmt = f'%-{max_name_len}s%s'
         docs = [fmt % (n, d) for n, d in results]
-        print('\n'.join(['complete'] + names + docs), end='\x00')
-
-def delegate_completion(args):
-    print('\n'.join(['delegate'] + args), end='\x00')
+        names = [shlex.quote(n) + (' ' if suffix is None else '') for n in names]
+        print('\n'.join(['complete', suffix or ''] + names + docs), end='\x00')
 
 def completion(driver, argv, opts=None):
     completer = autocomplete.create_autocompleter(driver=driver)
@@ -204,10 +216,13 @@ def completion(driver, argv, opts=None):
         print_completions(shapes)
 
     elif parsed.current_param in {'cli-input-json', 'cli-input-yaml'}:
-        delegate_completion(['cat', '--', parsed.current_fragment])
+        complete_files(parsed.current_fragment)
 
     elif [*commands, parsed.current_param] == ['cloudformation', 'deploy', 'template-file']:
-        delegate_completion(['cat', '--', parsed.current_fragment])
+        complete_files(parsed.current_fragment)
+
+    elif match := re.match('file://|fileb://', parsed.current_fragment):
+        complete_files(parsed.current_fragment[match.end():], prefix=match.group(0))
 
     elif param := cli.arg_table.get(parsed.current_param):
 
