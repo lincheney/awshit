@@ -249,7 +249,7 @@ def completion(driver, argv, opts=None):
         if matches := list(complete_from_shape(param.argument_model, param)):
             print_completions(matches)
 
-        elif commands[0] == 's3' and param.name == 'paths' and not param.argument_model:
+        elif commands[0] == 's3' and commands[1] not in {'mb', 'rb'} and param.name == 'paths' and not param.argument_model:
             # complete local files
             if param._default != 's3://':
                 doc = remove_xml(extract_doc(param.documentation))
@@ -257,16 +257,23 @@ def completion(driver, argv, opts=None):
 
             if parsed.current_fragment.startswith('s3://'):
                 # have some s3 path already
-                bucket, slash, prefix = parsed.current_fragment.removeprefix('s3://').partition('/')
+                bucket, slash, prefix = parsed.current_fragment.removeprefix('s3://').removesuffix('*').partition('/')
+                recursive = parsed.current_fragment.endswith('*')
+
                 if slash:
-                    for page in driver.session.create_client('s3').get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix=prefix, Delimiter='/'):
+                    kwargs = dict(Bucket=bucket, Prefix=prefix)
+                    if not recursive:
+                        kwargs['Delimiter'] = '/'
+
+                    for page in driver.session.create_client('s3').get_paginator('list_objects_v2').paginate(**kwargs):
                         print_completions([(f's3://{bucket}/{x["Prefix"]}', '') for x in page.get('CommonPrefixes', ())], suffix='')
                         print_completions((f's3://{bucket}/{x["Key"]}', '') for x in page.get('Contents', ()))
                     return
+
             if 's3://'.startswith(parsed.current_fragment[:len('s3://')]):
                 # grab some buckets
                 for page in driver.session.create_client('s3').get_paginator('list_buckets').paginate():
-                    print_completions((f's3://{x["Name"]}/', '') for x in page.get('Buckets', ()))
+                    print_completions([(f's3://{x["Name"]}/', '') for x in page.get('Buckets', ())], suffix='')
 
         # probably a file
         elif param.cli_name.endswith('-outfile') and isinstance(param.argument_model, botocore.model.StringShape):
