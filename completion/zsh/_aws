@@ -1,0 +1,15 @@
+#compdef aws
+local lines='' display matches cmd
+while read -r -d '' lines || [[ -n "${lines[*]}" ]]; do
+    lines=( "${(f)lines}" )
+    cmd="${lines[1]}"
+    lines=( "${lines[@]:1}" )
+    case "$cmd" in
+        complete)
+            matches=( "${lines[@]:0:${#lines[@]}/2}" )
+            display=( "${lines[@]:${#matches[@]}}" )
+            compadd -q -Q -d display -a -- matches
+            ;;
+    esac
+    lines=
+done < <(aws .tab-completion zsh "${words[@]:0:$CURRENT}")

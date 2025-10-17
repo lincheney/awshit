@@ -175,7 +175,7 @@ def print_completions(results, suffix=None):
         else:
             docs = list(names)
         names = [shlex.quote(n) + (' ' if suffix is None else '') for n in names]
-        print('\n'.join(['complete', suffix or ''] + names + docs), end='\x00')
+        print('\n'.join(['complete'] + names + docs), end='\x00')
 
 def completion(driver, argv, opts=None):
     shell, *argv = argv

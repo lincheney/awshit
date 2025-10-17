@@ -1,0 +1,17 @@
+# vi: ft=sh
+aws_completer(){
+    local lines=() matches cmd
+    while read -r -d '' lines || [[ -n "${lines[*]}" ]]; do
+        readarray -t lines <<<"$lines"
+        cmd="${lines[0]}"
+        lines=( "${lines[@]:1}" )
+        case "$cmd" in
+            complete)
+                matches=( "${lines[@]:0:${#lines[@]}/2}" )
+                COMPREPLY+=( "${matches[@]}" )
+                ;;
+        esac
+        lines=()
+    done < <(aws .tab-completion bash "${COMP_WORDS[@]::COMP_CWORD+1}")
+}
+complete -F aws_completer -o nospace aws
