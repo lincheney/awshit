@@ -3,6 +3,7 @@
 import sys
 import copy
 import signal
+import struct
 import os
 import time
 import select
@@ -92,13 +93,13 @@ class WorkerState:
         finally:
             os.dup2(self.fd_cache[dest], dest)
 
-    def work(self, sock):
+    def work(self, sock, pid):
         with contextlib.ExitStack() as exit_stack:
             # socket.fromfd dups the fd
             sock = exit_stack.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0, fileno=sock))
             exit_code = 1
             try:
-                exit_code = self._work(sock, exit_stack) or 0
+                exit_code = self._work(sock, pid, exit_stack) or 0
             except SystemExit as e:
                 exit_code = e.code
             except BaseException:
@@ -113,7 +114,7 @@ class WorkerState:
                 except Exception:
                     traceback.print_exc()
 
-    def _work(self, sock, exit_stack):
+    def _work(self, sock, pid, exit_stack):
         import botocore.session
 
         # Receive file descriptors for stdin, stdout, and stderr
@@ -121,6 +122,9 @@ class WorkerState:
         exit_stack.callback(os.close, fds[0])
         exit_stack.callback(os.close, fds[1])
         exit_stack.callback(os.close, fds[2])
+
+        # send our pid
+        sock.sendall(struct.pack('Q', pid))
 
         # read everything
         data = b""
@@ -173,6 +177,7 @@ class WorkerState:
 
     def run(self, inactivity_timeout=300):
         threading.Thread(target=self.socket_checker, daemon=True).start()
+        pid = os.getpid()
         while not self.should_quit:
             # available
             self.semaphore.release()
@@ -186,7 +191,7 @@ class WorkerState:
                 # unavailable
                 self.semaphore.acquire(False)
             # do the work
-            self.work(sockfd)
+            self.work(sockfd, pid)
 
     def socket_checker(self):
         while True:
@@ -228,6 +233,7 @@ class State:
         elif (pid := os.fork()) > 0:
             self.worker_pids.add(pid)
         else:
+            os.setsid()
             self.exit_stack.close()
             self.worker.run(**kwargs)
             return

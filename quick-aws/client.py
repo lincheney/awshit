@@ -2,6 +2,8 @@
 
 import os
 import socket
+import signal
+import struct
 import time
 import subprocess
 import json
@@ -55,8 +57,19 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
         fds = [sys.stdin.fileno(), sys.stdout.fileno(), sys.stderr.fileno()]
         multiprocessing.reduction.sendfds(client, fds)
 
+        # read the pid
+        buf = client.recv(8)
+        if not buf:
+            return
+        pid = struct.unpack('Q', buf)[0]
+
         # Send the serialized data
         client.sendall(serialized_data)
+
+        # forward some signals on
+        # for SIGTSTP, we also need to stop
+        signal.signal(signal.SIGTSTP, lambda *args: [os.killpg(pid, signal.SIGSTOP), os.kill(0, signal.SIGSTOP)])
+        signal.signal(signal.SIGCONT, lambda *args: os.killpg(pid, signal.SIGCONT))
 
         # Read the exit code from the server
         return int(client.recv(1024).decode() or '1')
