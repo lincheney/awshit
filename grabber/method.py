@@ -1,7 +1,6 @@
 from __future__ import annotations
 import math
 from collections import defaultdict
-from functools import cache
 from .service import Service
 from .arg import Arg, Args
 from .utils import OutputPath, KeySpec
@@ -69,7 +68,7 @@ class Method:
         args = Args.make(args)
         spec = KeySpec.make(key, method)
         method_score = spec.score(self.path)
-        for path, output_shape in OutputPath.from_shape(self.model.output_shape):
+        for path, output_shape, parent_shape in OutputPath.from_shape(self.model.output_shape):
             path_score = spec.score(OutputPath(self.path + path).for_scoring())
             if path_score is None:
                 continue

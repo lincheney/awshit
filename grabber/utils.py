@@ -95,18 +95,20 @@ class OutputPath(tuple[str]):
     def append(self, val: str):
         return type(self)(self + (val,))
 
-    def map_shape(self, shape, max_depth=10):
+    def map_shape(self, shape, parent=None, max_depth=10, only_leaves=True):
         if not shape or max_depth <= 0:
             return
-        elif isinstance(shape, botocore.model.StructureShape):
+        if not only_leaves:
+            yield (self, shape, parent)
+        if isinstance(shape, botocore.model.StructureShape):
             for k, v in shape.members.items():
-                yield from self.append(k).map_shape(v, max_depth=max_depth-1)
+                yield from self.append(k).map_shape(v, shape, max_depth=max_depth-1, only_leaves=only_leaves)
         elif isinstance(shape, botocore.model.ListShape):
-            yield from self.append(self.ITERATE).map_shape(shape.member, max_depth=max_depth-1)
+            yield from self.append(self.ITERATE).map_shape(shape.member, shape, max_depth=max_depth-1, only_leaves=only_leaves)
         elif isinstance(shape, botocore.model.MapShape):
-            yield from self.append(self.ITERATE).map_shape(shape.value, max_depth=max_depth-1)
-        elif isinstance(shape, botocore.model.StringShape) or shape.type_name in ('integer', 'long', 'timestamp', 'float', 'double'):
-            yield (self, shape)
+            yield from self.append(self.ITERATE).map_shape(shape.value, shape, max_depth=max_depth-1, only_leaves=only_leaves)
+        elif only_leaves and (isinstance(shape, botocore.model.StringShape) or shape.type_name in ('integer', 'long', 'timestamp', 'float', 'double')):
+            yield (self, shape, parent)
 
     def non_branching(self):
         if self.ITERATE in self:

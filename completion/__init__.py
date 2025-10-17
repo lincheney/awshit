@@ -245,8 +245,8 @@ class Completer:
             self.print_completions(self.complete_from_completer(autocomplete.basic.ProfileCompleter()) or ())
 
         elif parsed.current_param == 'query' and cli is not driver:
-            shapes = grabber_utils.OutputPath().map_shape(cli._operation_model.output_shape)
-            shapes = ((path.to_jmespath(), remove_xml(shape.documentation)) for path, shape in shapes)
+            shapes = grabber_utils.OutputPath().map_shape(cli._operation_model.output_shape, only_leaves=False)
+            shapes = ((path.to_jmespath(), remove_xml(shape.documentation or getattr(parent, 'documentation', ''))) for path, shape, parent in shapes if path)
             self.print_completions(shapes)
 
         elif parsed.current_param in {'cli-input-json', 'cli-input-yaml'}:
