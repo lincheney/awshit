@@ -8,6 +8,7 @@ import math
 import itertools
 import html
 import botocore.model
+import botocore.session
 import awscli.alias
 import awscli.formatter
 import awscli.autocomplete.main as autocomplete
@@ -168,15 +169,16 @@ class Completer:
     def print_completions(self, results, suffix=None):
         if results := list(results):
             names, docs = zip(*results)
-            self.max_name_len = max(self.max_name_len, max(map(len, names)))
-            width = math.ceil(self.max_name_len / 4 + 1) * 4
-            if any(docs):
-                fmt = f'%-{width}s%s'
-                docs = [fmt % (n, d) for n, d in results]
-            else:
-                docs = list(names)
+            docs = names
+            if self.need_docs:
+                self.max_name_len = max(self.max_name_len, max(map(len, names)))
+                width = math.ceil(self.max_name_len / 4 + 1) * 4
+                if any(docs):
+                    fmt = f'%-{width}s%s'
+                    docs = [fmt % (n, d) for n, d in results]
+
             names = [shlex.quote(n) + (' ' if suffix is None else '') for n in names]
-            print('\n'.join(['complete'] + names + docs), end='\x00')
+            print('\n'.join(['complete'] + names + list(docs)), end='\x00')
 
 
     def complete(self, driver, argv, opts=None):
@@ -223,6 +225,12 @@ class Completer:
             if param.positional_arg and nargs > sum(1 for x in parsed.unparsed_items if not x.startswith('-')) + 1:
                 parsed.current_param = param.name
         self.parsed = parsed
+
+        session = botocore.session.get_session()
+        if 'profile' in parsed.global_params:
+            session.set_config_variable('profile', parsed.global_params['profile'])
+        if 'region' in parsed.global_params:
+            session.set_config_variable('region', parsed.global_params['region'])
 
         if not parsed.current_fragment:
             parsed.current_fragment = self.current
@@ -271,14 +279,14 @@ class Completer:
                         if not recursive:
                             kwargs['Delimiter'] = '/'
 
-                        for page in driver.session.create_client('s3').get_paginator('list_objects_v2').paginate(**kwargs):
+                        for page in session.create_client('s3').get_paginator('list_objects_v2').paginate(**kwargs):
                             self.print_completions([(f's3://{bucket}/{x["Prefix"]}', '') for x in page.get('CommonPrefixes', ())], suffix='')
                             self.print_completions((f's3://{bucket}/{x["Key"]}', '') for x in page.get('Contents', ()))
                         return
 
                 if 's3://'.startswith(parsed.current_fragment[:len('s3://')]):
                     # grab some buckets
-                    for page in driver.session.create_client('s3').get_paginator('list_buckets').paginate():
+                    for page in session.create_client('s3').get_paginator('list_buckets').paginate():
                         self.print_completions([(f's3://{x["Name"]}/', '') for x in page.get('Buckets', ())], suffix='')
 
             # probably a file
@@ -294,7 +302,7 @@ class Completer:
                 if results is None:
                     # drop the verb
                     info = commands[1].partition('-')[2]
-                    if results := grabber_service.Service(commands[0], driver.session).how_to_get(info + ' ' + parsed.current_param):
+                    if results := grabber_service.Service(commands[0], session).how_to_get(info + ' ' + parsed.current_param):
                         # use the best one
                         print('Running:', results[0], file=sys.stderr)
                         for page in results[0].execute({}):
