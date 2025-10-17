@@ -8,7 +8,7 @@ while read -r -d '' lines || [[ -n "${lines[*]}" ]]; do
         complete)
             matches=( "${lines[@]:0:${#lines[@]}/2}" )
             display=( "${lines[@]:${#matches[@]}}" )
-            compadd -q -Q -d display -a -- matches
+            compadd -S '' -Q -d display -a -- matches
             ;;
     esac
     lines=
