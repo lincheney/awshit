@@ -309,7 +309,11 @@ def main():
         args = [client.find_aws(), '.start-command-server']
         os.execvp(args[0], args)
     else:
-        start_server(awscli.clidriver.create_clidriver(), sys.argv[1:])
+        driver = awscli.clidriver.create_clidriver()
+        # preload
+        driver.subcommand_table
+        driver.arg_table
+        start_server(driver, sys.argv[1:])
 
 if __name__ == '__main__':
     try:
