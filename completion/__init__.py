@@ -258,7 +258,10 @@ def completion(driver, argv, opts=None):
             complete_files(parsed.current_fragment, doc=doc)
 
         else:
-            results = complete_from_completer(parsed, autocomplete.serverside.create_server_side_completer(None))
+            # uhhh the builtin server side compelter is not that great sometimes
+            # e.g. trying to complete "aws ssm get-parameter --name ..." it fetches ssm doc names instead of ssm param names
+            #  results = complete_from_completer(parsed, autocomplete.serverside.create_server_side_completer(None))
+            results = None
             if results is None:
                 # drop the verb
                 info = commands[1].partition('-')[2]
