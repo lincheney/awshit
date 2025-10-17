@@ -12,4 +12,4 @@ while read -r -d '' lines || [[ -n "${lines[*]}" ]]; do
             ;;
     esac
     lines=
-done < <(aws .tab-completion zsh "${words[@]:0:$CURRENT}")
+done < <(aws .tab-completion -- zsh "${words[@]:0:$CURRENT}")

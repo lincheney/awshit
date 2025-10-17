@@ -12,6 +12,6 @@ aws_completer(){
                 ;;
         esac
         lines=()
-    done < <(aws .tab-completion bash "${COMP_WORDS[@]::COMP_CWORD+1}")
+    done < <(aws .tab-completion -- bash "${COMP_WORDS[@]::COMP_CWORD+1}")
 }
 complete -F aws_completer -o nospace aws
