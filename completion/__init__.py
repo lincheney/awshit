@@ -172,6 +172,7 @@ def print_completions(results, suffix=None):
         print('\n'.join(['complete', suffix or ''] + names + docs), end='\x00')
 
 def completion(driver, argv, opts=None):
+    current = argv[-1]
     completer = autocomplete.create_autocompleter(driver=driver)
     # we've already presplit the command
     argv = CommandLine(argv)
@@ -201,6 +202,9 @@ def completion(driver, argv, opts=None):
         else:
             break
 
+    if not parsed.current_fragment:
+        parsed.current_fragment = current
+
     if parsed.current_param == 'region':
         print_completions(complete_regions(parsed, driver))
 
@@ -224,24 +228,47 @@ def completion(driver, argv, opts=None):
     elif match := re.match('file://|fileb://', parsed.current_fragment):
         complete_files(parsed.current_fragment[match.end():], prefix=match.group(0))
 
-    elif param := cli.arg_table.get(parsed.current_param):
+    elif (param := cli.arg_table.get(parsed.current_param)) and cli is not driver:
 
-        if cli is not driver:
+        if matches := list(complete_from_shape(param.argument_model, param)):
+            print_completions(matches)
 
-            if matches := list(complete_from_shape(param.argument_model, param)):
-                print_completions(matches)
+        elif commands[0] == 's3' and param.name == 'paths' and not param.argument_model:
+            # complete local files
+            if param._default != 's3://':
+                doc = remove_xml(extract_doc(param.documentation))
+                complete_files(parsed.current_fragment, doc=doc)
+
+            if parsed.current_fragment.startswith('s3://'):
+                # have some s3 path already
+                bucket, slash, prefix = parsed.current_fragment.removeprefix('s3://').partition('/')
+                if slash:
+                    for page in driver.session.create_client('s3').get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix=prefix, Delimiter='/'):
+                        print_completions([(f's3://{bucket}/{x["Prefix"]}', '') for x in page.get('CommonPrefixes', ())], suffix='')
+                        print_completions((f's3://{bucket}/{x["Key"]}', '') for x in page.get('Contents', ()))
+                    return
+            if 's3://'.startswith(parsed.current_fragment[:len('s3://')]):
+                # grab some buckets
+                for page in driver.session.create_client('s3').get_paginator('list_buckets').paginate():
+                    print_completions((f's3://{x["Name"]}/', '') for x in page.get('Buckets', ()))
+
+        # probably a file
+        elif param.cli_name.endswith('-outfile') and isinstance(param.argument_model, botocore.model.StringShape):
+            doc = remove_xml(extract_doc(param.documentation))
+            complete_files(parsed.current_fragment, doc=doc)
+
+        else:
+            results = complete_from_completer(parsed, autocomplete.serverside.create_server_side_completer(None))
+            if results is None:
+                # drop the verb
+                info = commands[1].partition('-')[2]
+                if results := grabber_service.Service(commands[0], driver.session).how_to_get(info + ' ' + parsed.current_param):
+                    # use the best one
+                    print('Running:', results[0])
+                    for page in results[0].execute({}):
+                        print_completions((x, '') for x in page)
             else:
-                results = complete_from_completer(parsed, autocomplete.serverside.create_server_side_completer(None))
-                if results is None:
-                    # drop the verb
-                    info = commands[1].partition('-')[2]
-                    if results := grabber_service.Service(commands[0], driver.session).how_to_get(info + ' ' + parsed.current_param):
-                        # use the best one
-                        print('Running:', results[0])
-                        for page in results[0].execute({}):
-                            print_completions((x, '') for x in page)
-                else:
-                    print_completions(results)
+                print_completions(results)
 
     if not parsed.current_param or parsed.parsed_params.get(parsed.current_param):
         print_completions(complete_from_subcommand_table(parsed, cli, driver))

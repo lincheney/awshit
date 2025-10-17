@@ -27,7 +27,7 @@ class Args(frozenset[tuple[str, Arg]]):
     @classmethod
     def make(cls, val: Self | dict[str, Arg]):
         if isinstance(val, dict):
-            return cls(val.items())
+            return cls((k, v if isinstance(v, Arg) else StaticArg(v)) for k, v in val.items())
         return val
 
     @cache
