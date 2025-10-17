@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import re
 import os
 import shlex
@@ -289,7 +290,7 @@ def completion(driver, argv, opts=None):
                 info = commands[1].partition('-')[2]
                 if results := grabber_service.Service(commands[0], driver.session).how_to_get(info + ' ' + parsed.current_param):
                     # use the best one
-                    print('Running:', results[0])
+                    print('Running:', results[0], file=sys.stderr)
                     for page in results[0].execute({}):
                         print_completions((x, '') for x in page)
             else:
