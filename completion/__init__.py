@@ -31,8 +31,8 @@ class CommandLine:
 
 def extract_doc(doc):
     doc = re.sub(r'\n\s*', ' ', doc, flags=re.M)
-    if '<p>' in doc:
-        doc = re.search(r'<p>(.*?)(\. |</p>)', doc).group(1).strip()
+    if match := re.search(r'<p>(.*?)(\. |</p>)', doc):
+        doc = match.group(1).strip()
     elif re.match(r'\s*<p\s*/>\s*$', doc):
         doc = ''
     else:
@@ -155,13 +155,12 @@ def complete_files(fragment, doc='', prefix=''):
     dirname = os.path.dirname(fragment)
     basename = os.path.basename(fragment)
 
-    for root, dirs, files in os.walk(dirname or '.'):
-        if not basename.startswith('.'):
-            dirs = [d for d in dirs if not d.startswith('.')]
-            files = [f for f in files if not f.startswith('.')]
-        print_completions([(prefix + os.path.join(dirname, x) + '/', doc) for x in dirs], suffix='')
-        print_completions([(prefix + os.path.join(dirname, x), doc) for x in files])
-        break
+    root, dirs, files = next(os.walk(dirname or '.'))
+    if not basename.startswith('.'):
+        dirs = [d for d in dirs if not d.startswith('.')]
+        files = [f for f in files if not f.startswith('.')]
+    print_completions([(prefix + os.path.join(dirname, x) + '/', doc) for x in dirs], suffix='')
+    print_completions([(prefix + os.path.join(dirname, x), doc) for x in files])
 
 max_name_len = 0
 def print_completions(results, suffix=None):
