@@ -76,6 +76,23 @@ class Method:
             call = LazyMethodCall(self, args, excluded_methods, used_keys)
             yield LazyMethodCallOutput(call, path, method_score, path_score, shape)
 
+    def execute(self, args: Args, cache: dict):
+        cache_key = (self, args)
+        if cache_key in cache:
+            yield from cache[cache_key]
+            return
+
+        args = {k: v.inner for k, v in args}
+        if self.service.client.can_paginate(self.name):
+            pages = self.service.client.get_paginator(self.name).paginate(**args)
+        else:
+            pages = [getattr(self.service.client, self.name)(**args)]
+        result = []
+        for page in pages:
+            yield page
+            result.append(page)
+        cache[cache_key] = result
+
 class MethodCall(Arg):
     def __init__(self, method: Method, args: Args):
         self.method = method
@@ -95,6 +112,10 @@ class MethodCall(Arg):
         if self.args is None:
             return 1
         return self.args.complexity_score()
+
+    def execute(self, cache):
+        for arg in self.args.execute(cache):
+            yield from self.method.execute(arg, cache)
 
 class LazyMethodCall(Arg):
     def __init__(self, method: Method, args: Args, excluded_methods, used_keys):
@@ -155,3 +176,7 @@ class MethodCallOutput(BaseMethodCallOutput):
             # want shorter path
             -len(self.output_path.non_branching()),
         )
+
+    def execute(self, cache):
+        for result in self.call.execute(cache):
+            yield self.output_path.apply_to(result)

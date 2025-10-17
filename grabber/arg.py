@@ -1,12 +1,19 @@
 from __future__ import annotations
 from functools import cache
 from typing import Self
+import itertools
 
 class Arg:
     def unlazy(self) -> Self|None:
         return self
 
 class StaticArg(Arg):
+    def __init__(self, inner):
+        self.inner = inner
+    def __repr__(self):
+        return repr(self.inner)
+
+class ShapeArg(Arg):
     def __init__(self, inner, shape):
         self.inner = inner
         self.shape = shape
@@ -34,3 +41,18 @@ class Args(frozenset[tuple[str, Arg]]):
     def complexity_score(self):
         from .method import MethodCallOutput
         return 1 + sum((v.call.args.complexity_score() for k, v in self if isinstance(v, MethodCallOutput)), start=0)
+
+    def execute(self, cache):
+        from .method import MethodCallOutput
+        keys = []
+        values = []
+        for k, v in self:
+            if isinstance(v, MethodCallOutput):
+                v = [StaticArg(x) for x in v.execute(cache)]
+            else:
+                v = [v]
+            keys.append(k)
+            values.append(v)
+
+        for v in itertools.product(*values):
+            yield type(self)(zip(keys, v))

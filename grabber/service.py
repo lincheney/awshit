@@ -2,12 +2,13 @@ from __future__ import annotations
 import re
 import itertools
 from functools import cache
-import boto3
 import botocore.model
+import botocore.session
+import botocore.exceptions
 
 @cache
 def make_session():
-    return boto3.session.Session(region_name='us-east-1')
+    return botocore.session.Session()
 
 class Service:
     def __init__(self, name: str, session=None):
@@ -15,7 +16,10 @@ class Service:
             session = make_session()
         self.session = session
         self.name = name
-        self.client = session.client(self.name)
+        try:
+            self.client = session.create_client(self.name)
+        except botocore.exceptions.NoRegionError:
+            self.client = session.create_client(self.name, region_name='us-east-1')
 
     def __repr__(self):
         return self.name
@@ -42,7 +46,7 @@ class Service:
         if isinstance(shape, botocore.model.ListShape):
             return cls.how_to_get_from_shape(shape.member)
         if getattr(shape, 'enum', None):
-            return [StaticArg(x, shape) for x in shape.enum]
+            return [ShapeArg(x, shape) for x in shape.enum]
 
     def how_to_get(self, key: str, *, method: str|None=None, shape=None, excluded_methods=frozenset(), **kwargs):
         if shape is not None:
@@ -79,5 +83,5 @@ class Service:
         return []
 
 from .method import Method
-from .arg import StaticArg
+from .arg import ShapeArg
 from .utils import KeySpec

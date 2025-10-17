@@ -1,5 +1,4 @@
 import re
-import math
 from functools import cache
 import botocore.model
 
@@ -21,7 +20,7 @@ def singularise(string) -> str:
 def prepare_for_scoring(string: str):
     string = re.sub(r'([A-Z][a-z])', r' \1', string)
     string = re.sub(r'([a-z])([A-Z])', r'\1 \2', string)
-    return [singularise(x.lower()) for x in string.strip().split()]
+    return [singularise(x.lower()) for x in re.split(r'[-_.\s]', string.strip())]
 
 class KeySpec(tuple[str]):
     ID_FORMATS = ('id', 'name', 'arn', 'code', 'list', 'identifier')
@@ -97,7 +96,7 @@ class OutputPath(tuple[str]):
         return type(self)(self + (val,))
 
     def map_shape(self, shape, max_depth=10):
-        if max_depth <= 0:
+        if not shape or max_depth <= 0:
             return
         elif isinstance(shape, botocore.model.StructureShape):
             for k, v in shape.members.items():
@@ -116,3 +115,18 @@ class OutputPath(tuple[str]):
 
     def for_scoring(self):
         return type(self)(prepare_for_scoring(' '.join(self.non_branching())))
+
+    def to_jq(self):
+        return ''.join('[]' if x is self.ITERATE else '.'+x for x in self)
+
+    def to_jmespath(self):
+        return self.to_jq().removeprefix('.')
+
+    def apply_to(self, data):
+        data = [data]
+        for k in self:
+            if k is self.ITERATE:
+                data = [y for x in data for y in x]
+            else:
+                data = [x[k] for x in data]
+        return data
