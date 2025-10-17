@@ -211,6 +211,13 @@ def completion(driver, argv, opts=None):
         else:
             break
 
+    # positional multi args are not handled well
+    if parsed.current_param is None and parsed.parsed_params:
+        param = cli.arg_table[list(parsed.parsed_params)[-1]]
+        nargs = param.nargs
+        if param.positional_arg and nargs > sum(1 for x in parsed.unparsed_items if not x.startswith('-')) + 1:
+            parsed.current_param = param.name
+
     if not parsed.current_fragment:
         parsed.current_fragment = current
 
