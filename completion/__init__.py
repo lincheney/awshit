@@ -46,7 +46,8 @@ def complete_from_completer(parsed, completer):
     results = completer.complete(parsed)
     return results and [(item.name, item.help_text) for item in results]
 
-def complete_from_subcommand_table(parsed, cli, driver):
+def complete_from_subcommand_table(parsed, cli, driver, need_docs=True):
+    # this is the slowest completer, so try as many shortcuts as possible
     seen = set()
 
     if cli is driver:
@@ -63,7 +64,9 @@ def complete_from_subcommand_table(parsed, cli, driver):
             continue
 
         doc = ''
-        if isinstance(cmd, awscli.alias.ServiceAliasCommand):
+        if not need_docs:
+            pass
+        elif isinstance(cmd, awscli.alias.ServiceAliasCommand):
             doc = f'(alias) aws {cmd._alias_value} ...'
         elif isinstance(cmd, awscli.alias.BaseAliasCommand):
             doc = f'(alias) {cmd._alias_value}'
@@ -164,15 +167,21 @@ max_name_len = 0
 def print_completions(results, suffix=None):
     global max_name_len
     if results := list(results):
-        names = [n for n, d in results]
+        names, docs = zip(*results)
         max_name_len = max(max_name_len, math.ceil(max(map(len, names)) / 4 + 1) * 4)
-        fmt = f'%-{max_name_len}s%s'
-        docs = [fmt % (n, d) for n, d in results]
+        if any(docs):
+            fmt = f'%-{max_name_len}s%s'
+            docs = [fmt % (n, d) for n, d in results]
+        else:
+            docs = list(names)
         names = [shlex.quote(n) + (' ' if suffix is None else '') for n in names]
         print('\n'.join(['complete', suffix or ''] + names + docs), end='\x00')
 
 def completion(driver, argv, opts=None):
+    shell, *argv = argv
     current = argv[-1]
+    need_docs = shell == 'zsh'
+
     completer = autocomplete.create_autocompleter(driver=driver)
     # we've already presplit the command
     argv = CommandLine(argv)
@@ -274,7 +283,7 @@ def completion(driver, argv, opts=None):
                 print_completions(results)
 
     if not parsed.current_param or parsed.parsed_params.get(parsed.current_param):
-        print_completions(complete_from_subcommand_table(parsed, cli, driver))
+        print_completions(complete_from_subcommand_table(parsed, cli, driver, need_docs=need_docs))
         for required in (True, False):
             print_completions(complete_from_arg_table(parsed, cli, required))
             complete_from_arg_table_positional(parsed, cli, required)
