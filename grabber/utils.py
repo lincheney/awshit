@@ -20,7 +20,7 @@ def singularise(string) -> str:
 def prepare_for_scoring(string: str):
     string = re.sub(r'([A-Z][a-z])', r' \1', string)
     string = re.sub(r'([a-z])([A-Z])', r'\1 \2', string)
-    return [singularise(x.lower()) for x in re.split(r'[-_.\s]', string.strip())]
+    return [singularise(x.lower()) for x in re.split(r'[-_.\s]+', string.strip())]
 
 class KeySpec(tuple[str]):
     ID_FORMATS = ('id', 'name', 'arn', 'code', 'list', 'identifier')
