@@ -43,6 +43,7 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
         if not wait_for_server(proc, socket_path):
             # could not spawn/connect to server, run aws directly
             proc.terminate()
+            print('Failed to start aws command server', file=sys.stderr)
             # proc.kill()
             args = [find_aws(), *sys.argv[1:]]
             os.execvp(args[0], args)
