@@ -19,5 +19,7 @@ def awscli_initialize(event_hooks):
     event_hooks.register('building-command-table.main', hook)
 
 def hook(command_table, session, command_object, **kwargs):
-    command_object._get_cli_data()['options']['output']['choices'].append('json-stream')
-    awscli.formatter.CLI_OUTPUT_FORMATS['json-stream'] = StreamedJSONFormatter
+    choices = command_object._get_cli_data()['options']['output']['choices']
+    if 'json-stream' not in choices:
+        choices.append('json-stream')
+        awscli.formatter.CLI_OUTPUT_FORMATS['json-stream'] = StreamedJSONFormatter
