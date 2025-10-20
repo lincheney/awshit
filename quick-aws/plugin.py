@@ -313,9 +313,6 @@ def main():
         os.execvp(args[0], args)
     else:
         driver = awscli.clidriver.create_clidriver()
-        # preload
-        driver.subcommand_table
-        driver.arg_table
         start_server(driver, sys.argv[1:])
 
 if __name__ == '__main__':

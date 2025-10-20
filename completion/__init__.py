@@ -10,6 +10,8 @@ import html
 import botocore.model
 import botocore.session
 import awscli.alias
+import awscli.clidriver
+import awscli.customizations.waiters
 import awscli.formatter
 import awscli.autocomplete.main as autocomplete
 from .grabber import utils as grabber_utils
@@ -73,6 +75,10 @@ class Completer:
                 doc = f'(alias) aws {cmd._alias_value} ...'
             elif isinstance(cmd, awscli.alias.BaseAliasCommand):
                 doc = f'(alias) {cmd._alias_value}'
+            elif isinstance(cmd, awscli.customizations.waiters.WaiterStateCommand):
+                doc = cmd.DESCRIPTION
+            elif isinstance(cmd, awscli.clidriver.ServiceOperation):
+                doc = cmd._operation_model.documentation
             elif hasattr(cmd, 'service_model'):
                 doc = cmd.service_model.service_id
             elif hasattr(cmd, 'create_help_command') and (help := cmd.create_help_command()):
