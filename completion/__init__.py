@@ -60,7 +60,7 @@ class Completer:
             index = autocomplete.model.ModelIndex()
             for name, doc in self.complete_from_completer(autocomplete.basic.ModelIndexCompleter(index)) or ():
                 if doc:
-                    seen.add(doc)
+                    seen.add(name)
                     yield name, doc
 
         for name, cmd in cli.subcommand_table.items():
