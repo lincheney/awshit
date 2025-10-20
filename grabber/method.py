@@ -6,6 +6,11 @@ from .service import Service
 from .arg import Arg, Args
 from .utils import OutputPath, KeySpec
 
+IMPLICIT_DEFAULT = r'|'.join([
+    r'''if you (do not|don't) specify [^.]*?, the default [^.]*? is assumed''',
+    r'''if you (do not|don't) specify a status, only''',
+])
+
 class Method:
     def __init__(self, name: str, service: Service):
         self.service = service
@@ -20,7 +25,7 @@ class Method:
 
         # force passing in values that have a "default" value
         for k, v in self.model.input_shape.members.items():
-            if re.search(r'''if you (do not|don't) specify [^.]*?, the default [^.]*? is assumed''', v.documentation, re.IGNORECASE):
+            if re.search(IMPLICIT_DEFAULT, v.documentation, re.IGNORECASE):
                 self.requires[k] = v
 
         self.children = []
