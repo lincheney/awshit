@@ -11,7 +11,6 @@ class Method:
         self.service = service
         self.name = name
         self.model = self.service.client.meta.service_model.operation_model(self.service.client.meta.method_to_api_mapping[self.name])
-        self.cache = defaultdict(list)
         self.path = OutputPath(self.name.split('_')[1:]).for_scoring()
 
         if self.model.input_shape and self.model.input_shape.required_members:
@@ -21,13 +20,37 @@ class Method:
 
         # force passing in values that have a "default" value
         for k, v in self.model.input_shape.members.items():
-            if re.search('if you do not specify [^.]*?, the default [^.]*? is assumed', v.documentation, re.IGNORECASE):
+            if re.search(r'''if you (do not|don't) specify [^.]*?, the default [^.]*? is assumed''', v.documentation, re.IGNORECASE):
                 self.requires[k] = v
 
-        self.requires_keys = {KeySpec.make(k).without_format() for k in self.requires}
+        self.children = []
+        for k, v in self.model.input_shape.members.items():
+            if re.search(r'''if you (do not|don't) specify [^.]*?, you must specify''', v.documentation, re.IGNORECASE):
+                self.children.append(SingleMethod(self, {k: v}))
+
+        if not self.children:
+            self.children.append(SingleMethod(self, {}))
 
     def __repr__(self):
         return f'{self.service.name}.{self.name}'
+
+    def how_to_get(self, *args, **kwargs):
+        for c in self.children:
+            yield from c.how_to_get(*args, **kwargs)
+
+class SingleMethod:
+    def __init__(self, method: Method, extra_requires: dict):
+        self.method = method
+        self.name = self.method.name
+        self.service = self.method.service
+        self.path = self.method.path
+        self.model = self.method.model
+        self.cache = defaultdict(list)
+        self.requires = self.method.requires | extra_requires
+        self.requires_keys = {KeySpec.make(k).without_format() for k in self.requires}
+
+    def __repr__(self):
+        return repr(self.method)
 
     def how_to_call(self, args: Args|dict[str, Arg]=Args(), excluded_methods=frozenset(), used_keys=frozenset()) -> Args|None:
         args = Args.make(args)
@@ -100,7 +123,7 @@ class Method:
         cache[cache_key] = result
 
 class MethodCall(Arg):
-    def __init__(self, method: Method, args: Args):
+    def __init__(self, method: SingleMethod, args: Args):
         self.method = method
         self.args = args
 
@@ -124,7 +147,7 @@ class MethodCall(Arg):
             yield from self.method.execute(arg, cache)
 
 class LazyMethodCall(Arg):
-    def __init__(self, method: Method, args: Args, excluded_methods, used_keys):
+    def __init__(self, method: SingleMethod, args: Args, excluded_methods, used_keys):
         self.method = method
         self.args = args
         self.excluded_methods = excluded_methods
