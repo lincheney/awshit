@@ -239,7 +239,7 @@ class Completer:
             self.print_completions(self.complete_regions())
 
         elif parsed.current_param == 'output':
-            self.print_completions((k, '') for k in awscli.formatter.CLI_OUTPUT_FORMATS)
+            self.print_completions((k, (v.__doc__ or '').strip().split('\n')[0]) for k, v in awscli.formatter.CLI_OUTPUT_FORMATS.items())
 
         elif parsed.current_param == 'profile':
             self.print_completions(self.complete_from_completer(autocomplete.basic.ProfileCompleter()) or ())
