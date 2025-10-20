@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import math
 from collections import defaultdict
 from .service import Service
@@ -17,6 +18,12 @@ class Method:
             self.requires = {k: self.model.input_shape.members[k] for k in self.model.input_shape.required_members}
         else:
             self.requires = {}
+
+        # force passing in values that have a "default" value
+        for k, v in self.model.input_shape.members.items():
+            if re.search('if you do not specify [^.]*?, the default [^.]*? is assumed', v.documentation, re.IGNORECASE):
+                self.requires[k] = v
+
         self.requires_keys = {KeySpec.make(k).without_format() for k in self.requires}
 
     def __repr__(self):
