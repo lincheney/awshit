@@ -76,11 +76,17 @@ class WorkerState:
         self.current_sock = None
         self.sock_event = threading.Event()
         self.should_quit = False
+        self._event_hooks = copy.copy(self.components['event_emitter'])
 
         class SessionInjection:
             def __getattribute__(_self, key):
                 return object.__getattribute__(self.session, key)
         self.driver.session.__class__ = SessionInjection
+
+        class EventHookInjection:
+            def __getattribute__(_self, key):
+                return object.__getattribute__(self.event_hooks, key)
+        self.components['event_emitter'].__class__ = EventHookInjection
 
     @contextlib.contextmanager
     def temp_dup_fd(self, src, dest):
@@ -163,10 +169,9 @@ class WorkerState:
 
         # Make a copy of the driver
         driver = copy.copy(self.driver)
-        event_hooks = copy.copy(self.components['event_emitter'])
+        self.event_hooks = copy.copy(self._event_hooks)
         # Construct a new session
-        driver.session = botocore.session.Session(event_hooks=event_hooks)
-        self.session = driver.session
+        self.session = driver.session = botocore.session.Session(event_hooks=self.event_hooks)
         # reuse the same loader etc
         for k, v in self.components.items():
             driver.session.register_component(k, v)
