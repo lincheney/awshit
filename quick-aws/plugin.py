@@ -176,8 +176,10 @@ class WorkerState:
         for k, v in self.components.items():
             driver.session.register_component(k, v)
         driver._update_config_chain()
-        # always rebuild aliases
+        # always rebuild aliases, commands etc
         driver.alias_loader._aliases = None
+        driver._command_table = None
+        driver._arg_table = None
         return driver.main(args)
 
     def run(self, inactivity_timeout=300):
