@@ -13,10 +13,9 @@ class StaticArg(Arg):
     def __repr__(self):
         return repr(self.inner)
 
-class ShapeArg(Arg):
-    def __init__(self, inner, shape):
+class MultiArg(Arg):
+    def __init__(self, inner: list):
         self.inner = inner
-        self.shape = shape
     def __repr__(self):
         return repr(self.inner)
 
@@ -49,6 +48,8 @@ class Args(frozenset[tuple[str, Arg]]):
         for k, v in self:
             if isinstance(v, MethodCallOutput):
                 v = [StaticArg(x) for x in v.execute(cache)]
+            elif isinstance(v, MultiArg):
+                v = [StaticArg(x) for x in v.inner]
             else:
                 v = [v]
             keys.append(k)

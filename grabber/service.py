@@ -46,7 +46,7 @@ class Service:
         if isinstance(shape, botocore.model.ListShape):
             return cls.how_to_get_from_shape(shape.member)
         if getattr(shape, 'enum', None):
-            return [ShapeArg(x, shape) for x in shape.enum]
+            return [MultiArg(shape.enum)]
 
     def how_to_get(self, key: str, *, method: str|None=None, shape=None, excluded_methods=frozenset(), **kwargs):
         if shape is not None:
@@ -83,5 +83,5 @@ class Service:
         return []
 
 from .method import Method
-from .arg import ShapeArg
+from .arg import MultiArg
 from .utils import KeySpec
