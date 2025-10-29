@@ -1,9 +1,12 @@
 import os
+import traceback
+import awscli.constants
 
 class ExceptionHandler:
     @staticmethod
     def handle_exception(exception, stdout, stderr):
-        raise exception
+        traceback.print_exception(exception)
+        return awscli.constants.GENERAL_ERROR_RC
 
 def awscli_initialize(event_hooks):
     event_hooks.register('building-command-table.main', hook)
