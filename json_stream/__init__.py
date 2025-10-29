@@ -1,5 +1,12 @@
 import awscli.formatter
+import awscli.utils
 import json
+
+class JSONDumper:
+    @staticmethod
+    def dump(value, stream):
+        json.dump(value, stream, ensure_ascii=False, default=awscli.utils.json_encoder)
+        stream.write('\n')
 
 class StreamedJSONFormatter(awscli.formatter.StreamedYAMLFormatter):
     '''
@@ -7,11 +14,7 @@ class StreamedJSONFormatter(awscli.formatter.StreamedYAMLFormatter):
     '''
 
     def __init__(self, args):
-        super().__init__(args, yaml_dumper=json)
-
-    def _flush_stream(self, stream):
-        stream.write('\n')
-        return super()._flush_stream(stream)
+        super().__init__(args, yaml_dumper=JSONDumper)
 
 def awscli_initialize(event_hooks):
     event_hooks.register('building-command-table.main', hook)
