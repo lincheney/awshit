@@ -30,7 +30,14 @@ def wait_for_server(proc, socket_path):
             return False
         time.sleep(0.1)
 
+def exec_aws(args):
+    args = [find_aws(), *args]
+    os.execvp(args[0], args)
+
 def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws/cli/command_server.sock'))):
+    if sys.argv[1:2] == ['.start-command-server']:
+        exec_aws(sys.argv[1:])
+
     if not os.path.exists(socket_path):
         # spawn the server
         proc = subprocess.Popen(
@@ -45,8 +52,7 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
             proc.terminate()
             print('Failed to start aws command server', file=sys.stderr)
             # proc.kill()
-            args = [find_aws(), *sys.argv[1:]]
-            os.execvp(args[0], args)
+            exec_aws(sys.argv[1:])
 
     data = [dict(os.environ), os.getcwd()] + sys.argv[1:]
     serialized_data = json.dumps(data).encode() + b'\n'
