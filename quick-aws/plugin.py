@@ -229,6 +229,8 @@ class State:
 
     def run(self, socket_path, inactivity_timeout=300):
         if os.path.exists(socket_path):
+            print('could not start command server, file already exists:', socket_path, file=sys.stderr)
+            # awscli will probably obscure this error
             raise FileExistsError(socket_path)
 
         # reap and keep track of workers
