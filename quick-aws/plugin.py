@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import sys
-import copy
 import signal
 import struct
 import os
@@ -19,7 +18,8 @@ def awscli_initialize(event_hooks):
     event_hooks.register('building-command-table.main', inject_commands)
 
 def inject_commands(command_table, session, command_object, **kwargs):
-    command_table['.start-command-server'] = partial(start_server, command_object)
+    session = command_object.session
+    command_table['.start-command-server'] = partial(start_server, session)
 
 @contextlib.contextmanager
 def temp_set_attr(var, name, file):
@@ -67,16 +67,14 @@ def waitpids():
             break
 
 class WorkerState:
-    def __init__(self, sock, driver, components, semaphore):
+    def __init__(self, sock, components, semaphore):
         self.sock = sock
-        self.driver = driver
         self.components = components
         self.semaphore = semaphore
         self.fd_cache = {}
         self.current_sock = None
         self.sock_event = threading.Event()
         self.should_quit = False
-        self.event_hooks = copy.copy(self.driver.session.get_component('event_emitter'))
 
     @contextlib.contextmanager
     def temp_dup_fd(self, src, dest):
@@ -111,7 +109,7 @@ class WorkerState:
                     traceback.print_exc()
 
     def _work(self, sock, pid, exit_stack):
-        import botocore.session
+        import awscli.clidriver
 
         # Receive file descriptors for stdin, stdout, and stderr
         fds = multiprocessing.reduction.recvfds(sock, 3)
@@ -157,19 +155,11 @@ class WorkerState:
         assert isinstance(cwd, str), 'second argument should be a string of the cwd'
         exit_stack.enter_context(contextlib.chdir(cwd))
 
-        # Make a copy of the driver
-        driver = copy.copy(self.driver)
-        # Construct a new session
-        event_hooks = copy.copy(self.event_hooks)
-        driver.session = botocore.session.Session(event_hooks=event_hooks)
+        driver = awscli.clidriver.create_clidriver()
         # reuse the same loader etc
         for k, v in self.components.items():
             driver.session.register_component(k, v)
-        driver._update_config_chain()
-        # always rebuild aliases, commands etc
-        driver.alias_loader._aliases = None
-        driver._command_table = None
-        driver._arg_table = None
+        driver._error_handler = None
         return driver.main(args)
 
     def run(self, inactivity_timeout=300):
@@ -278,20 +268,19 @@ class State:
         if self.pid == os.getpid() and os.path.exists(socket_path):
             os.unlink(socket_path)
 
-def start_server(driver, argv, opts=None):
+def start_server(session, argv, opts=None):
     # slurp up any zombie children
     list(waitpids())
 
     components = {
         'data_loader',
-        #  'event_emitter',
+        # 'event_emitter',
         'response_parser_factory',
         'endpoint_resolver',
         'exceptions_factory',
     }
     state = State(
-        driver=driver,
-        components={k: driver.session.get_component(k) for k in components},
+        components={k: session.get_component(k) for k in components},
     )
 
     # awscrt starts a thread for logging, but it won't work post fork
@@ -306,14 +295,15 @@ def start_server(driver, argv, opts=None):
 def main():
     try:
         import awscli.clidriver
+        import botocore.session
     except ImportError:
         # can't import directly, hopefully you have installed as a plugin
         import client
         args = [client.find_aws(), '.start-command-server']
         os.execvp(args[0], args)
     else:
-        driver = awscli.clidriver.create_clidriver()
-        start_server(driver, sys.argv[1:])
+        #  driver = awscli.clidriver.create_clidriver()
+        start_server(botocore.session.Session(), sys.argv[1:])
 
 if __name__ == '__main__':
     try:
