@@ -54,8 +54,10 @@ class Service:
             if args is not None:
                 return args
 
-        key_spec = KeySpec.make(key, method)
+        key_spec = KeySpec.make(key)
+        method_key_spec = KeySpec.make(key, method)
         best_methods = []
+        best_method_methods = []
         good_methods = []
         bad_methods = []
 
@@ -64,6 +66,8 @@ class Service:
                 meth = self.make_method(m)
                 if meth.path in [tuple(k.split()) for s, k in key_spec.matchers()]:
                     best_methods.append(meth)
+                elif meth.path in [tuple(k.split()) for s, k in method_key_spec.matchers()]:
+                    best_method_methods.append(meth)
                 elif key_spec.matches(meth.path):
                     good_methods.append(meth)
                 else:
@@ -71,6 +75,7 @@ class Service:
 
         for methods, scorer in [
             (best_methods, lambda c, k: (-len(c.call.method.requires), c.quick_score(k))),
+            (best_method_methods, lambda c, k: (-len(c.call.method.requires), c.quick_score(k))),
             (good_methods, lambda c, k: c.quick_score(k)),
             (bad_methods,  lambda c, k: c.quick_score(k)),
         ]:

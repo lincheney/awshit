@@ -28,7 +28,7 @@ class KeySpec(tuple[str]):
 
     @classmethod
     def make(cls, key: str, method=None):
-        method = [singularise(x) for x in (method or '').lower().split('_')[1:]]
+        method = [singularise(x) for x in re.split(r'[-_]', (method or '').lower())[1:]]
         return cls(method + prepare_for_scoring(key))
 
     def get_format(self):

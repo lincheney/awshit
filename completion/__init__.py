@@ -308,7 +308,7 @@ class Completer:
                 if results is None:
                     # drop the verb
                     info = commands[1].partition('-')[2]
-                    if results := grabber_service.Service(commands[0], session).how_to_get(info + ' ' + parsed.current_param):
+                    if results := grabber_service.Service(commands[0], session).how_to_get(parsed.current_param, method=info):
                         # use the best one
                         print('Running:', results[0], file=sys.stderr)
                         for page in results[0].execute({}):
