@@ -159,7 +159,6 @@ class WorkerState:
         # reuse the same loader etc
         for k, v in self.components.items():
             driver.session.register_component(k, v)
-        driver._error_handler = None
         return driver.main(args)
 
     def run(self, inactivity_timeout=300):
