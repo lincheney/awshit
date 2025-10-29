@@ -24,12 +24,13 @@ class Method:
             self.requires = {}
 
         # force passing in values that have a "default" value
-        for k, v in self.model.input_shape.members.items():
+        input_members = getattr(self.model.input_shape, 'members', {})
+        for k, v in input_members.items():
             if re.search(IMPLICIT_DEFAULT, v.documentation, re.IGNORECASE):
                 self.requires[k] = v
 
         self.children = []
-        for k, v in self.model.input_shape.members.items():
+        for k, v in input_members.items():
             if re.search(r'''if you (do not|don't) specify [^.]*?, you must specify''', v.documentation, re.IGNORECASE):
                 self.children.append(SingleMethod(self, {k: v}))
 
