@@ -123,13 +123,19 @@ class Completer:
         elif isinstance(shape, botocore.model.StringShape):
             if shape.enum:
                 yield from ((i, '') for i in shape.enum)
-            else:
-                results = {k: '' for k in getattr(arg, 'choices', ()) or ()}
-                if doc := re.search(r'<ul>(.*?)</ul>', getattr(arg, '_help', '')):
+            elif results := {k: '' for k in getattr(arg, 'choices', ()) or ()}:
+                doc = getattr(arg, '_help', '') or getattr(arg, 'documentation', '')
+                if doc := re.search(r'<ul>(.*?)</ul>', doc):
                     for match in re.findall(r'<li>(.*?)</li>', doc.group(1)):
                         match, _, descr = match.strip().partition(' - ')
                         results[match] = descr
                 yield from results.items()
+            else:
+                # no values grab from doc
+                doc = getattr(arg, '_help', '') or getattr(arg, 'documentation', '')
+                if match := re.search(r'Valid values [^.]*\bare:? (<code>.*?)\.', doc):
+                    for value in re.findall(r'<code>(.*?)</code>', match.group(1)):
+                        yield (value, '')
         elif isinstance(shape, botocore.model.ListShape):
             yield from self.complete_from_shape(shape.member, arg, seen=seen)
         elif isinstance(shape, botocore.model.StructureShape):
