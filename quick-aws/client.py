@@ -65,9 +65,18 @@ def main(socket_path=os.environ.get('AWS_CLI_SOCKET', os.path.expanduser('~/.aws
         multiprocessing.reduction.sendfds(client, fds)
 
         # read the pid
+        # if the client is 3.14+ it expects a b'A'
+        # but the server may be <3.14 so need it sends an extra one
+        # but if we are actually <3.14 then we have extra b'A' to remove
+        while (buf := client.recv(1)) and buf == b'A':
+            pass
+        # we cannot just lstrip(b'A') in case the packed pid starts with b'A'
+        # but we also don't know how many b'A' we will get so we need a delimiter
+        if buf != b'_':
+            return 1
         buf = client.recv(8)
         if not buf:
-            return
+            return 1
         pid = struct.unpack('Q', buf)[0]
 
         # Send the serialized data

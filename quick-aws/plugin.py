@@ -118,7 +118,10 @@ class WorkerState:
         exit_stack.callback(os.close, fds[2])
 
         # send our pid
-        sock.sendall(struct.pack('Q', pid))
+        pid = struct.pack('Q', pid)
+        # if the client is 3.14+ it expects a b'A'
+        # but the server may be <3.14 so need to send an extra one
+        sock.sendall(b'A_' + pid)
 
         # read everything
         data = b""
